@@ -91,8 +91,15 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void _setupSocket() {
-    // Pastikan socket sudah connect
-    SocketService.connect();
+    // ✅ Penting: jangan buat socket baru di GameScreen.
+    // Ambil socket yang sama dari SocketService (yang sudah dibuat di Lobby).
+    // Jika ternyata belum ada (jarang), baru connect sekali.
+    final socket = SocketService.socket ?? SocketService.connect();
+
+    if (socket == null) {
+      // socket service belum siap
+      return;
+    }
 
     SocketService.off('game:player_joined');
     SocketService.on('game:player_joined', (data) {
