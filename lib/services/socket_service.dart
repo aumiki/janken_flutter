@@ -23,18 +23,20 @@ class SocketService {
     if (_socket != null && _socket!.connected) return _socket!;
 
     _connectedToken = token;
+    print('[Socket] 🔑 Token saat connect: "$token"'); // ← tambah ini
     _socket = IO.io(
       AppConfig.socketUrl,
       IO.OptionBuilder()
-          // ✅ FIX UTAMA: path wajib sama dengan server (/api/socket)
           .setPath('/api/socket')
-          // ✅ Pakai polling dulu lalu upgrade ke websocket (lebih reliable di Railway)
-          .setTransports(['polling', 'websocket'])
+          .setTransports(['websocket']) // ← websocket only, skip polling
           .disableAutoConnect()
           .enableReconnection()
-          .setReconnectionAttempts(10)
-          .setReconnectionDelay(1000)
-          .setTimeout(20000)
+          .setReconnectionAttempts(5)
+          .setReconnectionDelay(2000)
+          .setTimeout(30000)
+          .setExtraHeaders({
+            'Authorization': 'Bearer ${token ?? ''}', // ← pindah ke header
+          })
           .setAuth({'token': token ?? ''})
           .build(),
     );

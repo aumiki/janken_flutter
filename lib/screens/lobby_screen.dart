@@ -30,6 +30,11 @@ class _LobbyScreenState extends State<LobbyScreen> {
     super.initState();
     _user = AuthService.currentUser;
     _loadData();
+
+    // ← TAMBAH INI untuk debug
+    print('[DEBUG] Token saat masuk lobby: "${AuthService.token}"');
+    print('[DEBUG] User: ${AuthService.currentUser?.username}');
+
     _setupSocket();
   }
 
@@ -46,26 +51,26 @@ class _LobbyScreenState extends State<LobbyScreen> {
     socket.on('game:room_created', (data) {
       final stateB64 = _encodeState(data['state']);
       final roomCode = data['roomCode'];
-      Navigator.pushNamed(
-          context, '/waiting', arguments: {'code': roomCode, 'mode': 'casual', 'gs': stateB64});
+      Navigator.pushNamed(context, '/waiting',
+          arguments: {'code': roomCode, 'mode': 'casual', 'gs': stateB64});
     });
 
     socket.on('game:joined', (data) {
       final stateB64 = _encodeState(data['state']);
-      Navigator.pushNamed(
-          context, '/game', arguments: {'room': data['roomCode'], 'gs': stateB64});
+      Navigator.pushNamed(context, '/game',
+          arguments: {'room': data['roomCode'], 'gs': stateB64});
     });
 
     socket.on('game:ranked_match_found', (data) {
       final stateB64 = _encodeState(data['state']);
-      Navigator.pushNamed(
-          context, '/game', arguments: {'room': data['roomCode'], 'gs': stateB64});
+      Navigator.pushNamed(context, '/game',
+          arguments: {'room': data['roomCode'], 'gs': stateB64});
     });
 
     socket.on('game:challenge_accepted', (data) {
       final stateB64 = _encodeState(data['state']);
-      Navigator.pushNamed(
-          context, '/game', arguments: {'room': data['roomCode'], 'gs': stateB64});
+      Navigator.pushNamed(context, '/game',
+          arguments: {'room': data['roomCode'], 'gs': stateB64});
     });
 
     socket.on('game:challenge_received', (data) {
@@ -76,8 +81,8 @@ class _LobbyScreenState extends State<LobbyScreen> {
     });
 
     socket.on('game:queued', (_) {
-      Navigator.pushNamed(
-          context, '/waiting', arguments: {'code': 'RANKED', 'mode': 'ranked'});
+      Navigator.pushNamed(context, '/waiting',
+          arguments: {'code': 'RANKED', 'mode': 'ranked'});
     });
 
     socket.on('error', (e) {
@@ -159,7 +164,8 @@ class _LobbyScreenState extends State<LobbyScreen> {
           JankenBottomNav(
             currentIndex: 0,
             onTap: (i) {
-              if (i == 1) Navigator.pushReplacementNamed(context, '/leaderboard');
+              if (i == 1)
+                Navigator.pushReplacementNamed(context, '/leaderboard');
               if (i == 2) Navigator.pushReplacementNamed(context, '/profile');
             },
           ),
@@ -186,10 +192,10 @@ class _LobbyScreenState extends State<LobbyScreen> {
                   borderRadius: BorderRadius.circular(20)),
               clipBehavior: Clip.antiAlias,
               child: _user?.avatar != null
-                  ? Image.network(_user!.avatar!, fit: BoxFit.cover,
+                  ? Image.network(_user!.avatar!,
+                      fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => const Center(
-                          child: Text('🐼',
-                              style: TextStyle(fontSize: 20))))
+                          child: Text('🐼', style: TextStyle(fontSize: 20))))
                   : const Center(
                       child: Text('🐼', style: TextStyle(fontSize: 20))),
             ),
@@ -247,8 +253,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
               right: -20,
               top: -10,
               child: Text('✊',
-                  style: TextStyle(
-                      fontSize: 120, color: Colors.white10)),
+                  style: TextStyle(fontSize: 120, color: Colors.white10)),
             ),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -288,8 +293,8 @@ class _LobbyScreenState extends State<LobbyScreen> {
                 ),
                 const SizedBox(height: 20),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 24, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(50),
@@ -374,9 +379,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
                     EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               ),
               style: const TextStyle(
-                  letterSpacing: 2,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 15),
+                  letterSpacing: 2, fontWeight: FontWeight.w700, fontSize: 15),
               onSubmitted: (_) => _joinRoom(),
             ),
           ),
@@ -384,8 +387,8 @@ class _LobbyScreenState extends State<LobbyScreen> {
           ElevatedButton(
             onPressed: _joinRoom,
             style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 20, vertical: 14),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10))),
             child: const Text('JOIN'),
@@ -443,8 +446,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
                     offset: const Offset(0, 2))
               ],
             ),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
             child: Row(
               children: [
                 Text('#${i + 1}',
@@ -523,18 +525,14 @@ class _CasualCard extends StatelessWidget {
             Container(
               width: 56,
               height: 56,
-              decoration:
-                  BoxDecoration(color: iconBg, shape: BoxShape.circle),
+              decoration: BoxDecoration(color: iconBg, shape: BoxShape.circle),
               child: Center(
-                  child:
-                      Text(icon, style: const TextStyle(fontSize: 24))),
+                  child: Text(icon, style: const TextStyle(fontSize: 24))),
             ),
             const SizedBox(height: 14),
             Text(title,
                 style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 15,
-                    color: color)),
+                    fontWeight: FontWeight.w800, fontSize: 15, color: color)),
             const SizedBox(height: 4),
             Text(subtitle,
                 style: const TextStyle(
@@ -558,15 +556,15 @@ class _PlayerAvatar extends StatelessWidget {
     return Container(
       width: size,
       height: size,
-      decoration: BoxDecoration(
-          color: AppColors.rankBg, shape: BoxShape.circle),
+      decoration:
+          BoxDecoration(color: AppColors.rankBg, shape: BoxShape.circle),
       clipBehavior: Clip.antiAlias,
       child: avatar != null
-          ? Image.network(avatar!, fit: BoxFit.cover,
+          ? Image.network(avatar!,
+              fit: BoxFit.cover,
               errorBuilder: (_, __, ___) => const Center(
                   child: Text('🧑', style: TextStyle(fontSize: 18))))
-          : const Center(
-              child: Text('🧑', style: TextStyle(fontSize: 18))),
+          : const Center(child: Text('🧑', style: TextStyle(fontSize: 18))),
     );
   }
 }
