@@ -75,7 +75,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     // This fires when the app is in FOREGROUND
     // For background/killed state, FCM handles it via NotificationService
     socket.on('game:challenge_received', (data) async {
+      print('[CHALLENGE RECEIVED][LEADERBOARD]');
+      print(data);
       final challenge = ChallengeData.fromJson(data);
+
       if (mounted) {
         setState(() => _pendingChallenge = challenge);
         // Show in-app dialog

@@ -13,6 +13,11 @@ class NotificationService {
   /// Callback saat user tap notifikasi challenge
   static Function(ChallengeData)? onChallengeReceived;
 
+  /// Inbox untuk challenge terakhir yang masuk.
+  /// Supaya kalau listener belum terpasang (mis. user pindah screen),
+  /// challenge tetap tidak hilang.
+  static ChallengeData? _lastChallenge;
+
   /// Init stub (no Firebase/FCM).
   static Future<void> init() async {
     // No-op. If the project later reintroduces local notifications,
@@ -48,8 +53,18 @@ class NotificationService {
     }
   }
 
+  /// Ambil challenge terakhir yang masuk lalu clear.
+  /// Cocok untuk fallback ketika UI baru dibuka setelah event diterima.
+  static ChallengeData? consumeLastChallenge() {
+    final data = _lastChallenge;
+    _lastChallenge = null;
+    return data;
+  }
+
   /// Show notif when challenged via Socket.IO
   static Future<void> notifyChallenge(ChallengeData data) async {
+    _lastChallenge = data;
+
     await showChallengeNotification(
       title: '⚔️ Challenge dari ${data.challengerName}!',
       body:

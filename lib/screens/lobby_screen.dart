@@ -6,6 +6,7 @@ import '../models/game_state.dart';
 import '../services/auth_service.dart';
 import '../services/socket_service.dart';
 import '../services/api_service.dart';
+import '../services/notification_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/bottom_nav.dart';
 import '../widgets/challenge_dialog.dart';
@@ -24,14 +25,28 @@ class _LobbyScreenState extends State<LobbyScreen> {
   ChallengeData? _challenge;
   String _notif = '';
   final _joinCtrl = TextEditingController();
-  bool _socketInitialized = false; // ✅ TAMBAH: track socket readiness
+  bool _navigating = false;
+  bool _socketInitialized = false;
 
   @override
   void initState() {
     super.initState();
     _user = AuthService.currentUser;
     _loadData();
+
+    // ← TAMBAH INI untuk debug
+    print('[DEBUG] Token: "${AuthService.token}"');
+    print('[DEBUG] Socket connected? ${SocketService.isConnected}');
     _setupSocket();
+    _consumePendingChallenge();
+  }
+
+  void _consumePendingChallenge() {
+    final pending = NotificationService.consumeLastChallenge();
+    if (pending == null) return;
+    if (!mounted) return;
+    setState(() => _challenge = pending);
+    _showChallengeDialog();
   }
 
   void _loadData() async {
@@ -42,59 +57,143 @@ class _LobbyScreenState extends State<LobbyScreen> {
   }
 
   void _setupSocket() {
-    final socket = SocketService.connect();
+    final socket = SocketService.socket;
 
-    // ✅ FIX: Set _socketInitialized saat connect
+    // Socket global seharusnya sudah connect di main.dart.
+    if (socket == null) {
+      if (mounted) setState(() => _socketInitialized = false);
+      return;
+    }
+
+    void safeNavigateTo(String route, Map<String, dynamic> args) {
+      if (_navigating) return;
+      _navigating = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Navigator.pushNamed(context, route, arguments: args);
+        _navigating = false;
+      });
+    }
+
+    void registerLobbyEvents() {
+      SocketService.off('game:room_created');
+      socket.on('game:room_created', (data) {
+        debugPrint('[LOBBY][EVENT] game:room_created => $data');
+        final stateB64 = _encodeState(data['state']);
+        final roomCode =
+            data['roomCode'] ?? data['roomcode'] ?? data['room'] ?? '';
+        if (roomCode.toString().isEmpty) {
+          debugPrint('[LOBBY][WARN] room_created missing roomCode');
+          return;
+        }
+        safeNavigateTo(
+            '/waiting', {'code': roomCode, 'mode': 'casual', 'gs': stateB64});
+      });
+
+      SocketService.off('game:joined');
+      socket.on('game:joined', (data) {
+        debugPrint('[LOBBY][EVENT] game:joined => $data');
+        final stateB64 = _encodeState(data['state']);
+        final roomCode =
+            data['roomCode'] ?? data['roomcode'] ?? data['room'] ?? '';
+        safeNavigateTo('/game', {'room': roomCode, 'gs': stateB64});
+      });
+
+      SocketService.off('game:ranked_match_found');
+      socket.on('game:ranked_match_found', (data) {
+        debugPrint('[LOBBY][EVENT] game:ranked_match_found => $data');
+        final stateB64 = _encodeState(data['state']);
+        final roomCode =
+            data['roomCode'] ?? data['roomcode'] ?? data['room'] ?? '';
+        safeNavigateTo('/game', {'room': roomCode, 'gs': stateB64});
+      });
+
+      SocketService.off('game:challenge_accepted');
+      socket.on('game:challenge_accepted', (data) {
+        debugPrint('[LOBBY][EVENT] game:challenge_accepted => $data');
+        if (_navigating) return;
+
+        final stateB64 = _encodeState(data['state']);
+        final roomCode =
+            data['roomCode'] ?? data['roomcode'] ?? data['room'] ?? '';
+
+        // tutup dialog challenge kalau masih ada
+        if (Navigator.canPop(context)) {
+          Navigator.pop(context);
+        }
+
+        if (roomCode.toString().isEmpty) {
+          debugPrint(
+              '[LOBBY][WARN] challenge_accepted missing roomCode; not navigating');
+          return;
+        }
+
+        safeNavigateTo('/game', {
+          'room': roomCode,
+          'gs': stateB64,
+        });
+      });
+
+      // FIX PALING PENTING: re-register listener challenge saat reconnect
+      SocketService.off('game:challenge_received');
+      socket.on('game:challenge_received', (data) {
+        debugPrint('[LOBBY][EVENT] game:challenge_received => $data');
+
+        if (!mounted) return;
+        try {
+          setState(() => _challenge = ChallengeData.fromJson(data));
+          _showChallengeDialog();
+        } catch (e) {
+          debugPrint('[LOBBY][ERROR] parse challenge_received failed: $e');
+        }
+      });
+
+      // Fallback: beberapa server mungkin kirim nama event berbeda
+      SocketService.off('challenge:received');
+      socket.on('challenge:received', (data) {
+        debugPrint('[LOBBY][EVENT] challenge:received => $data');
+        if (!mounted) return;
+        try {
+          setState(() => _challenge = ChallengeData.fromJson(data));
+          _showChallengeDialog();
+        } catch (_) {}
+      });
+
+      SocketService.off('game:queued');
+      socket.on('game:queued', (_) {
+        Navigator.pushNamed(context, '/waiting',
+            arguments: {'code': 'RANKED', 'mode': 'ranked'});
+      });
+
+      SocketService.off('error');
+      socket.on('error', (e) {
+        if (!mounted) return;
+        final msg = e['message'] ?? 'Terjadi kesalahan';
+        setState(() => _notif = msg);
+
+        // ← TAMBAH INI: kalau masih dalam game, auto force leave
+        if (msg.toString().toLowerCase().contains('game') ||
+            msg.toString().toLowerCase().contains('room')) {
+          SocketService.emit('game:leave_room', {});
+          SocketService.emit('game:forfeit', {});
+        }
+
+        Future.delayed(const Duration(seconds: 3),
+            () => mounted ? setState(() => _notif = '') : null);
+      });
+    }
+
+    // register awal
+    registerLobbyEvents();
+
+    // register ulang status UI + listener saat socket connect/reconnect
+    SocketService.off('connect');
     socket.on('connect', (_) {
       if (mounted) setState(() => _socketInitialized = true);
       print('[Socket] Connected to lobby');
-    });
 
-    socket.on('game:room_created', (data) {
-      final stateB64 = _encodeState(data['state']);
-      final roomCode = data['roomCode'];
-      Navigator.pushNamed(context, '/waiting',
-          arguments: {'code': roomCode, 'mode': 'casual', 'gs': stateB64});
-    });
-
-    socket.on('game:joined', (data) {
-      final stateB64 = _encodeState(data['state']);
-      Navigator.pushNamed(context, '/game',
-          arguments: {'room': data['roomCode'], 'gs': stateB64});
-    });
-
-    socket.on('game:ranked_match_found', (data) {
-      final stateB64 = _encodeState(data['state']);
-      Navigator.pushNamed(context, '/game',
-          arguments: {'room': data['roomCode'], 'gs': stateB64});
-    });
-
-    socket.on('game:challenge_accepted', (data) {
-      final stateB64 = _encodeState(data['state']);
-      Navigator.pushNamed(context, '/game',
-          arguments: {'room': data['roomCode'], 'gs': stateB64});
-    });
-
-    socket.on('game:challenge_received', (data) {
-      if (mounted) {
-        setState(() => _challenge = ChallengeData.fromJson(data));
-        _showChallengeDialog();
-      }
-    });
-
-    socket.on('game:queued', (_) {
-      Navigator.pushNamed(context, '/waiting',
-          arguments: {'code': 'RANKED', 'mode': 'ranked'});
-    });
-
-    socket.on('error', (e) {
-      if (mounted) {
-        final msg = e is Map ? (e['message'] ?? 'Terjadi kesalahan') : e.toString();
-        setState(() => _notif = msg);
-        // ✅ FIX: Hapus leave_room + forfeit emit
-        Future.delayed(const Duration(seconds: 3),
-            () => mounted ? setState(() => _notif = '') : null);
-      }
+      // penting: listener challenge harus terdaftar ulang setelah reconnect
+      registerLobbyEvents();
     });
   }
 
@@ -115,9 +214,15 @@ class _LobbyScreenState extends State<LobbyScreen> {
       builder: (_) => ChallengeDialog(
         challenge: _challenge!,
         onAccept: () {
-          Navigator.pop(context);
-          SocketService.emit('game:accept_challenge',
-              {'challengerId': _challenge!.challengerId});
+          SocketService.emit(
+            'game:accept_challenge',
+            {'challengerId': _challenge!.challengerId},
+          );
+
+          if (Navigator.canPop(context)) {
+            Navigator.pop(context);
+          }
+
           setState(() => _challenge = null);
         },
         onDecline: () {
@@ -131,6 +236,8 @@ class _LobbyScreenState extends State<LobbyScreen> {
   @override
   void dispose() {
     _joinCtrl.dispose();
+    _navigating = false;
+
     SocketService.off('game:room_created');
     SocketService.off('game:joined');
     SocketService.off('game:ranked_match_found');
@@ -212,12 +319,11 @@ class _LobbyScreenState extends State<LobbyScreen> {
                         fontWeight: FontWeight.w800,
                         fontSize: 16,
                         color: AppColors.primary)),
-                // ✅ FIX: Tampilkan status socket connecting
                 Text(
                   '● ${_user?.rankedPoints ?? 1000} PTS${!_socketInitialized ? " (🔌 Connecting...)" : ""}',
-                  style: TextStyle(
+                  style: const TextStyle(
                       fontSize: 11,
-                      color: _socketInitialized ? AppColors.green : Colors.orange,
+                      color: AppColors.green,
                       fontWeight: FontWeight.w700),
                 ),
               ],
@@ -244,10 +350,13 @@ class _LobbyScreenState extends State<LobbyScreen> {
                     fontWeight: FontWeight.w600,
                     fontSize: 13)),
           ),
-          // ✅ FIX: Hapus leave_room + forfeit, cuma close notif
           GestureDetector(
-            onTap: () => setState(() => _notif = ''),
-            child: const Text('✕',
+            onTap: () {
+              SocketService.emit('game:leave_room', {});
+              SocketService.emit('game:forfeit', {});
+              setState(() => _notif = '');
+            },
+            child: const Text('✕ Keluar',
                 style: TextStyle(
                     color: AppColors.primary,
                     fontWeight: FontWeight.w700,
@@ -259,84 +368,78 @@ class _LobbyScreenState extends State<LobbyScreen> {
   }
 
   Widget _buildRankedBanner() {
-    // ✅ FIX: Tambah guard untuk socket readiness
     return GestureDetector(
-      onTap: _socketInitialized
-          ? () => SocketService.emit('game:create_room', {'mode': 'RANKED'})
-          : () => setState(() => _notif = 'Socket sedang terhubung...'),
-      child: Opacity(
-        opacity: _socketInitialized ? 1.0 : 0.6,
-        child: Container(
-          decoration: BoxDecoration(
-            color: AppColors.primary,
-            borderRadius: BorderRadius.circular(24),
-          ),
-          padding: const EdgeInsets.all(28),
-          child: Stack(
-            children: [
-              const Positioned(
-                right: -20,
-                top: -10,
-                child: Text('✊',
-                    style: TextStyle(fontSize: 120, color: Colors.white10)),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.white24,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Text(
-                      'SEASON 1 LIVE',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1),
-                    ),
+      onTap: () => SocketService.emit('game:create_room', {'mode': 'RANKED'}),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.primary,
+          borderRadius: BorderRadius.circular(24),
+        ),
+        padding: const EdgeInsets.all(28),
+        child: Stack(
+          children: [
+            const Positioned(
+              right: -20,
+              top: -10,
+              child: Text('✊',
+                  style: TextStyle(fontSize: 120, color: Colors.white10)),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(20),
                   ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'RANKED MATCH',
+                  child: const Text(
+                    'SEASON 1 LIVE',
                     style: TextStyle(
                         color: Colors.white,
-                        fontSize: 32,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: -0.5),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Menangkan untuk +1 poin, kalah -1 poin.\nTrivia twists setiap 3 ronde!',
-                    style: TextStyle(
-                        color: Colors.white.withOpacity(0.75),
-                        fontSize: 13,
-                        height: 1.6),
-                  ),
-                  const SizedBox(height: 20),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                    decoration: BoxDecoration(
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'RANKED MATCH',
+                  style: TextStyle(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(50),
-                    ),
-                    child: const Text(
-                      'PLAY RANKED ⚡',
-                      style: TextStyle(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 13,
-                          letterSpacing: 1.5),
-                    ),
+                      fontSize: 32,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.5),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Menangkan untuk +1 poin, kalah -1 poin.\nTrivia twists setiap 3 ronde!',
+                  style: TextStyle(
+                      color: Colors.white.withOpacity(0.75),
+                      fontSize: 13,
+                      height: 1.6),
+                ),
+                const SizedBox(height: 20),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(50),
                   ),
-                ],
-              ),
-            ],
-          ),
+                  child: const Text(
+                    'PLAY RANKED ⚡',
+                    style: TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13,
+                        letterSpacing: 1.5),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -352,11 +455,8 @@ class _LobbyScreenState extends State<LobbyScreen> {
             title: 'BUAT ROOM',
             subtitle: 'Main bareng teman',
             color: AppColors.blue,
-            isDisabled: !_socketInitialized, // ✅ FIX: Add guard
-            onTap: _socketInitialized
-                ? () =>
-                    SocketService.emit('game:create_room', {'mode': 'CASUAL'})
-                : () => setState(() => _notif = 'Socket sedang terhubung...'),
+            onTap: () =>
+                SocketService.emit('game:create_room', {'mode': 'CASUAL'}),
           ),
         ),
         const SizedBox(width: 16),
@@ -367,10 +467,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
             title: 'JOIN CODE',
             subtitle: 'Masukkan kode room',
             color: const Color(0xFF1A6A4A),
-            isDisabled: !_socketInitialized, // ✅ FIX: Add guard
-            onTap: _socketInitialized
-                ? () => setState(() => _showJoin = !_showJoin)
-                : () => setState(() => _notif = 'Socket sedang terhubung...'),
+            onTap: () => setState(() => _showJoin = !_showJoin),
           ),
         ),
       ],
@@ -397,7 +494,6 @@ class _LobbyScreenState extends State<LobbyScreen> {
               controller: _joinCtrl,
               textCapitalization: TextCapitalization.characters,
               maxLength: 6,
-              enabled: _socketInitialized, // ✅ FIX: Disable until ready
               inputFormatters: [
                 FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9]'))
               ],
@@ -418,7 +514,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
           ),
           const SizedBox(width: 10),
           ElevatedButton(
-            onPressed: _socketInitialized ? _joinRoom : null, // ✅ FIX: Guard
+            onPressed: _joinRoom,
             style: ElevatedButton.styleFrom(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
@@ -433,10 +529,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
 
   void _joinRoom() {
     final code = _joinCtrl.text.trim().toUpperCase();
-    if (code.length < 4) {
-      setState(() => _notif = 'Kode room harus minimal 4 karakter');
-      return;
-    }
+    if (code.length < 4) return;
     SocketService.emit('game:join_room', {'roomCode': code});
   }
 
@@ -530,7 +623,6 @@ class _CasualCard extends StatelessWidget {
   final String subtitle;
   final Color color;
   final VoidCallback onTap;
-  final bool isDisabled; // ✅ FIX: Add disabled state
 
   const _CasualCard({
     required this.icon,
@@ -539,47 +631,43 @@ class _CasualCard extends StatelessWidget {
     required this.subtitle,
     required this.color,
     required this.onTap,
-    this.isDisabled = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Opacity(
-        opacity: isDisabled ? 0.6 : 1.0,
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 16,
-                  offset: const Offset(0, 2))
-            ],
-          ),
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(color: iconBg, shape: BoxShape.circle),
-                child: Center(
-                    child: Text(icon, style: const TextStyle(fontSize: 24))),
-              ),
-              const SizedBox(height: 14),
-              Text(title,
-                  style: TextStyle(
-                      fontWeight: FontWeight.w800, fontSize: 15, color: color)),
-              const SizedBox(height: 4),
-              Text(subtitle,
-                  style: const TextStyle(
-                      fontSize: 12, color: AppColors.textSecondary),
-                  textAlign: TextAlign.center),
-            ],
-          ),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 16,
+                offset: const Offset(0, 2))
+          ],
+        ),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(color: iconBg, shape: BoxShape.circle),
+              child: Center(
+                  child: Text(icon, style: const TextStyle(fontSize: 24))),
+            ),
+            const SizedBox(height: 14),
+            Text(title,
+                style: TextStyle(
+                    fontWeight: FontWeight.w800, fontSize: 15, color: color)),
+            const SizedBox(height: 4),
+            Text(subtitle,
+                style: const TextStyle(
+                    fontSize: 12, color: AppColors.textSecondary),
+                textAlign: TextAlign.center),
+          ],
         ),
       ),
     );
@@ -609,3 +697,5 @@ class _PlayerAvatar extends StatelessWidget {
     );
   }
 }
+
+// Needed imports

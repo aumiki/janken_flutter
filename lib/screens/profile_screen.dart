@@ -194,7 +194,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
     if (confirm == true) {
       await AuthService.logout();
-      SocketService.disconnect();
+      // Socket global sebaiknya tidak diputus hanya karena pindah screen.
+      // Jika ingin memutus socket, lakukan terpusat (mis. benar-benar logout/keluar app).
+      // Di sini kita biarkan socket tetap hidup supaya koneksi realtime tidak putus tiba-tiba.
       if (mounted) Navigator.pushReplacementNamed(context, '/login');
     }
   }
