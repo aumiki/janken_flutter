@@ -48,6 +48,11 @@ class _LobbyScreenState extends State<LobbyScreen> {
   void _setupSocket() {
     final socket = SocketService.connect();
 
+    socket.onConnect((_) {
+      SocketService.emit('game:leave_room', {});
+      SocketService.emit('game:forfeit', {});
+    });
+
     socket.on('game:room_created', (data) {
       final stateB64 = _encodeState(data['state']);
       final roomCode = data['roomCode'];
@@ -87,7 +92,16 @@ class _LobbyScreenState extends State<LobbyScreen> {
 
     socket.on('error', (e) {
       if (mounted) {
-        setState(() => _notif = e['message'] ?? 'Terjadi kesalahan');
+        final msg = e['message'] ?? 'Terjadi kesalahan';
+        setState(() => _notif = msg);
+
+        // ← TAMBAH INI: kalau masih dalam game, auto force leave
+        if (msg.toString().toLowerCase().contains('game') ||
+            msg.toString().toLowerCase().contains('room')) {
+          SocketService.emit('game:leave_room', {});
+          SocketService.emit('game:forfeit', {});
+        }
+
         Future.delayed(const Duration(seconds: 3),
             () => mounted ? setState(() => _notif = '') : null);
       }
@@ -230,11 +244,29 @@ class _LobbyScreenState extends State<LobbyScreen> {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       color: const Color(0xFFFDE8E8),
-      child: Text(_notif,
-          style: const TextStyle(
-              color: AppColors.primary,
-              fontWeight: FontWeight.w600,
-              fontSize: 13)),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(_notif,
+                style: const TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13)),
+          ),
+          GestureDetector(
+            onTap: () {
+              SocketService.emit('game:leave_room', {});
+              SocketService.emit('game:forfeit', {});
+              setState(() => _notif = '');
+            },
+            child: const Text('✕ Keluar',
+                style: TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12)),
+          ),
+        ],
+      ),
     );
   }
 
