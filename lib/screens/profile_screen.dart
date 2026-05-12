@@ -30,7 +30,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _user = AuthService.currentUser;
     _usernameCtrl.text = _user?.username ?? '';
     _loadProfile();
-    SocketService.connect();
   }
 
   Future<void> _loadProfile() async {
@@ -241,7 +240,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             currentIndex: 2,
             onTap: (i) {
               if (i == 0) Navigator.pushReplacementNamed(context, '/lobby');
-              if (i == 1) Navigator.pushReplacementNamed(context, '/leaderboard');
+              if (i == 1)
+                Navigator.pushReplacementNamed(context, '/leaderboard');
             },
           ),
         ],
@@ -336,8 +336,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   child: _user?.avatar != null
                       ? _buildAvatarImage(_user!.avatar!)
                       : const Center(
-                          child: Text('🐼',
-                              style: TextStyle(fontSize: 48))),
+                          child: Text('🐼', style: TextStyle(fontSize: 48))),
                 ),
                 // Camera badge
                 Container(
@@ -346,8 +345,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   decoration: BoxDecoration(
                     color: AppColors.primary,
                     shape: BoxShape.circle,
-                    border:
-                        Border.all(color: Colors.white, width: 2),
+                    border: Border.all(color: Colors.white, width: 2),
                   ),
                   child: _saving
                       ? const Center(
@@ -376,8 +374,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             const SizedBox(height: 4),
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
               decoration: BoxDecoration(
                 color: AppColors.primary.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(20),
@@ -408,9 +405,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         }
       } catch (_) {}
     }
-    return Image.network(src, fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => const Center(
-            child: Text('🐼', style: TextStyle(fontSize: 48))));
+    return Image.network(src,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) =>
+            const Center(child: Text('🐼', style: TextStyle(fontSize: 48))));
   }
 
   Widget _buildProfileCard(int winRate) {
@@ -436,8 +434,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     controller: _usernameCtrl,
                     decoration: const InputDecoration(
                       hintText: 'Username baru',
-                      contentPadding: EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 12),
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                     ),
                     style: const TextStyle(
                         fontSize: 15, fontWeight: FontWeight.w600),
@@ -457,8 +455,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           height: 16,
                           child: CircularProgressIndicator(
                               color: Colors.white, strokeWidth: 2))
-                      : const Text('Simpan',
-                          style: TextStyle(fontSize: 13)),
+                      : const Text('Simpan', style: TextStyle(fontSize: 13)),
                 ),
                 const SizedBox(width: 6),
                 TextButton(
@@ -491,8 +488,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       Text(
                         _user?.email ?? '-',
                         style: const TextStyle(
-                            fontSize: 13,
-                            color: AppColors.textSecondary),
+                            fontSize: 13, color: AppColors.textSecondary),
                       ),
                     ],
                   ),
@@ -502,8 +498,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   style: OutlinedButton.styleFrom(
                     side: const BorderSide(color: AppColors.border),
                     shape: const StadiumBorder(),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   ),
                   child: const Text('Edit',
                       style: TextStyle(
@@ -521,8 +517,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildStatsCard(int winRate) {
     final stats = [
-      _Stat(label: 'POIN', value: '${_user?.rankedPoints ?? 1000}', color: AppColors.primary),
-      _Stat(label: 'MENANG', value: '${_user?.wins ?? 0}', color: AppColors.green),
+      _Stat(
+          label: 'POIN',
+          value: '${_user?.rankedPoints ?? 1000}',
+          color: AppColors.primary),
+      _Stat(
+          label: 'MENANG',
+          value: '${_user?.wins ?? 0}',
+          color: AppColors.green),
       _Stat(label: 'WIN RATE', value: '$winRate%', color: AppColors.blue),
     ];
     return Container(
@@ -555,9 +557,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         children: [
           Text(s.value,
               style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  color: s.color)),
+                  fontSize: 22, fontWeight: FontWeight.w900, color: s.color)),
           const SizedBox(height: 4),
           Text(s.label,
               style: const TextStyle(
@@ -575,8 +575,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (_user?.createdAt != null) {
       try {
         final dt = DateTime.parse(_user!.createdAt!);
-        joinDate =
-            '${dt.day}/${dt.month}/${dt.year}';
+        joinDate = '${dt.day}/${dt.month}/${dt.year}';
       } catch (_) {}
     }
 
@@ -669,8 +668,7 @@ class _SheetOption extends StatelessWidget {
                           color: AppColors.textPrimary)),
                   Text(subtitle,
                       style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary)),
+                          fontSize: 12, color: AppColors.textSecondary)),
                 ],
               ),
             ),

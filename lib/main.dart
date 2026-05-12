@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 
 import 'services/notification_service.dart';
 import 'services/auth_service.dart';
+import 'services/socket_service.dart';
+
 import 'theme/app_theme.dart';
 import 'screens/splash_screen.dart';
 import 'screens/login_screen.dart';
@@ -34,6 +36,9 @@ void main() async {
 
   // Notification service init (FCM + Local Notifications)
   await NotificationService.init();
+
+  // ✅ Socket connect hanya sekali setelah auth siap
+  SocketService.connect();
 
   runApp(const JankenApp());
 }

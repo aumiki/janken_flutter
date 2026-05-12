@@ -45,7 +45,11 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   Future<void> _fetchLeaderboard() async {
     setState(() => _loading = true);
     final players = await ApiService.fetchLeaderboard();
-    if (mounted) setState(() { _players = players; _loading = false; });
+    if (mounted)
+      setState(() {
+        _players = players;
+        _loading = false;
+      });
   }
 
   Future<void> _refreshMyPoints() async {
@@ -54,7 +58,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   }
 
   void _setupSocket() {
-    final socket = SocketService.connect();
+    final socket = SocketService.socket;
+    if (socket == null) return;
 
     socket.on('user:online', (_) => _fetchLeaderboard());
     socket.on('user:offline', (_) => _fetchLeaderboard());
@@ -83,16 +88,16 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     socket.on('game:challenge_accepted', (data) {
       final stateB64 = _encodeState(data['state']);
       if (mounted) {
-        Navigator.pushNamed(
-            context, '/game', arguments: {'room': data['roomCode'], 'gs': stateB64});
+        Navigator.pushNamed(context, '/game',
+            arguments: {'room': data['roomCode'], 'gs': stateB64});
       }
     });
 
     socket.on('game:ranked_match_found', (data) {
       final stateB64 = _encodeState(data['state']);
       if (mounted) {
-        Navigator.pushNamed(
-            context, '/game', arguments: {'room': data['roomCode'], 'gs': stateB64});
+        Navigator.pushNamed(context, '/game',
+            arguments: {'room': data['roomCode'], 'gs': stateB64});
       }
     });
   }
@@ -133,7 +138,11 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     });
     SocketService.emit('game:challenge_player', {'targetUserId': targetId});
     Future.delayed(const Duration(seconds: 10), () {
-      if (mounted) setState(() { _challenging = null; _notif = ''; });
+      if (mounted)
+        setState(() {
+          _challenging = null;
+          _notif = '';
+        });
     });
   }
 
@@ -186,14 +195,16 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                     const Center(
                         child: Padding(
                       padding: EdgeInsets.all(40),
-                      child: CircularProgressIndicator(
-                          color: AppColors.primary),
+                      child:
+                          CircularProgressIndicator(color: AppColors.primary),
                     ))
                   else if (_players.isEmpty)
                     _buildEmptyState()
                   else
-                    ..._players.asMap().entries.map((e) =>
-                        _buildPlayerRow(e.key, e.value)),
+                    ..._players
+                        .asMap()
+                        .entries
+                        .map((e) => _buildPlayerRow(e.key, e.value)),
                   const SizedBox(height: 20),
                   // My rank card
                   if (_user != null && myRank >= 0)
@@ -218,8 +229,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     return SafeArea(
       bottom: false,
       child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         decoration: const BoxDecoration(
             border: Border(bottom: BorderSide(color: AppColors.border))),
         child: Row(
@@ -233,8 +243,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             GestureDetector(
               onTap: _fetchLeaderboard,
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                 decoration: BoxDecoration(
                   border: Border.all(color: AppColors.border),
                   borderRadius: BorderRadius.circular(20),
@@ -276,12 +286,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           SizedBox(height: 12),
           Text('Belum ada pemain terdaftar',
               style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary)),
+                  fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
           SizedBox(height: 8),
           Text('Daftar akun untuk muncul di sini!',
-              style: TextStyle(
-                  fontSize: 13, color: AppColors.textSecondary)),
+              style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
         ],
       ),
     );
@@ -380,8 +388,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                 ),
               if (p.isOnline)
                 const Text('●',
-                    style:
-                        TextStyle(fontSize: 7, color: AppColors.green)),
+                    style: TextStyle(fontSize: 7, color: AppColors.green)),
               const SizedBox(width: 6),
               Text('${p.rankedPoints}',
                   style: const TextStyle(
@@ -464,15 +471,15 @@ class _Avatar extends StatelessWidget {
     return Container(
       width: size,
       height: size,
-      decoration: BoxDecoration(
-          color: bg ?? AppColors.rankBg, shape: BoxShape.circle),
+      decoration:
+          BoxDecoration(color: bg ?? AppColors.rankBg, shape: BoxShape.circle),
       clipBehavior: Clip.antiAlias,
       child: avatar != null
-          ? Image.network(avatar!, fit: BoxFit.cover,
+          ? Image.network(avatar!,
+              fit: BoxFit.cover,
               errorBuilder: (_, __, ___) => const Center(
                   child: Text('🧑', style: TextStyle(fontSize: 16))))
-          : const Center(
-              child: Text('🧑', style: TextStyle(fontSize: 16))),
+          : const Center(child: Text('🧑', style: TextStyle(fontSize: 16))),
     );
   }
 }
