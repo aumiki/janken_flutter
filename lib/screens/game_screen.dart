@@ -94,23 +94,28 @@ class _GameScreenState extends State<GameScreen> {
     // Pastikan socket sudah connect
     SocketService.connect();
 
+    SocketService.off('game:player_joined');
     SocketService.on('game:player_joined', (data) {
       if (data['state'] != null) _applyStateFromJson(data['state']);
     });
 
+    SocketService.off('game:joined');
     SocketService.on('game:joined', (data) {
       if (data['state'] != null) _applyStateFromJson(data['state']);
     });
 
+    SocketService.off('game:ranked_match_found');
     SocketService.on('game:ranked_match_found', (data) {
       if (data['state'] != null) _applyStateFromJson(data['state']);
     });
 
+    SocketService.off('game:challenge_accepted');
     SocketService.on('game:challenge_accepted', (data) {
       if (data['state'] != null) _applyStateFromJson(data['state']);
     });
 
     // ✅ FIX: handle reconnect — server kirim ulang state terkini
+    SocketService.off('game:reconnected');
     SocketService.on('game:reconnected', (data) {
       if (data['state'] != null) {
         final state = data['state'];
@@ -119,6 +124,7 @@ class _GameScreenState extends State<GameScreen> {
       }
     });
 
+    SocketService.off('game:round_start');
     SocketService.on('game:round_start', (data) {
       _timerTick?.cancel();
       final t = data['timer'] as int? ?? 5;
@@ -129,9 +135,8 @@ class _GameScreenState extends State<GameScreen> {
           _phase = GamePhase.picking;
           _round = data['round'] ?? _round + 1;
           _timer = t;
-          _myMove = lockedMove != null
-              ? GameMoveExt.fromString(lockedMove)
-              : null;
+          _myMove =
+              lockedMove != null ? GameMoveExt.fromString(lockedMove) : null;
           _opponentPicked = false;
           _lockedMove = lockedMove;
           _spyHint = null;
@@ -154,14 +159,17 @@ class _GameScreenState extends State<GameScreen> {
       });
     });
 
+    SocketService.off('game:spy_reveal');
     SocketService.on('game:spy_reveal', (data) {
       if (mounted) setState(() => _spyHint = data['notPickedMove']);
     });
 
+    SocketService.off('game:opponent_exposed');
     SocketService.on('game:opponent_exposed', (data) {
       if (mounted) setState(() => _opponentExposed = data['move']);
     });
 
+    SocketService.off('game:move_locked');
     SocketService.on('game:move_locked', (data) {
       final lm = data['lockedMove'] as String?;
       if (mounted) {
@@ -173,10 +181,12 @@ class _GameScreenState extends State<GameScreen> {
       }
     });
 
+    SocketService.off('game:opponent_picked');
     SocketService.on('game:opponent_picked', (_) {
       if (mounted) setState(() => _opponentPicked = true);
     });
 
+    SocketService.off('game:round_result');
     SocketService.on('game:round_result', (data) {
       _timerTick?.cancel();
       final result = RoundResultData.fromJson(data);
@@ -190,6 +200,7 @@ class _GameScreenState extends State<GameScreen> {
       }
     });
 
+    SocketService.off('game:trivia_start');
     SocketService.on('game:trivia_start', (data) {
       _triviaTimer?.cancel();
       final timeLimit = data['timeLimit'] as int? ?? 15;
@@ -198,7 +209,11 @@ class _GameScreenState extends State<GameScreen> {
         options: List<String>.from(data['options'] ?? []),
         triviaTimer: timeLimit,
       );
-      if (mounted) setState(() { _phase = GamePhase.trivia; _trivia = trivia; });
+      if (mounted)
+        setState(() {
+          _phase = GamePhase.trivia;
+          _trivia = trivia;
+        });
       int t = timeLimit;
       _triviaTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
         t--;
@@ -207,6 +222,7 @@ class _GameScreenState extends State<GameScreen> {
       });
     });
 
+    SocketService.off('game:trivia_self_answered');
     SocketService.on('game:trivia_self_answered', (data) {
       if (mounted) {
         setState(() {
@@ -217,10 +233,12 @@ class _GameScreenState extends State<GameScreen> {
       }
     });
 
+    SocketService.off('game:effect_received');
     SocketService.on('game:effect_received', (data) {
       _showEffect(data['effect'] ?? {});
     });
 
+    SocketService.off('game:trivia_resolved');
     SocketService.on('game:trivia_resolved', (data) {
       _triviaTimer?.cancel();
       if (mounted) {
@@ -233,6 +251,7 @@ class _GameScreenState extends State<GameScreen> {
       }
     });
 
+    SocketService.off('game:over');
     SocketService.on('game:over', (data) {
       _timerTick?.cancel();
       _triviaTimer?.cancel();
@@ -244,18 +263,20 @@ class _GameScreenState extends State<GameScreen> {
       }
     });
 
+    SocketService.off('game:player_disconnected');
     SocketService.on('game:player_disconnected', (data) {
-      _showEffect(
-          {'id': 'dc', 'name': '❌ ${data['username']} keluar', 'type': 'debuff'});
+      _showEffect({
+        'id': 'dc',
+        'name': '❌ ${data['username']} keluar',
+        'type': 'debuff'
+      });
     });
   }
 
   void _showEffect(Map effect) {
     final id = DateTime.now().millisecondsSinceEpoch.toString();
     final eff = GameEffect(
-        id: id,
-        name: effect['name'] ?? '',
-        type: effect['type'] ?? 'buff');
+        id: id, name: effect['name'] ?? '', type: effect['type'] ?? 'buff');
     if (mounted) setState(() => _effects = [..._effects, eff]);
     Future.delayed(const Duration(seconds: 3), () {
       if (mounted) setState(() => _effects.removeWhere((e) => e.id == id));
@@ -282,12 +303,23 @@ class _GameScreenState extends State<GameScreen> {
     _timerTick?.cancel();
     _triviaTimer?.cancel();
     for (final ev in [
-      'game:player_joined', 'game:joined', 'game:challenge_accepted',
-      'game:ranked_match_found', 'game:reconnected', 'game:round_start',
-      'game:move_locked', 'game:opponent_picked', 'game:round_result',
-      'game:trivia_start', 'game:trivia_self_answered', 'game:effect_received',
-      'game:trivia_resolved', 'game:over', 'game:player_disconnected',
-      'game:spy_reveal', 'game:opponent_exposed',
+      'game:player_joined',
+      'game:joined',
+      'game:challenge_accepted',
+      'game:ranked_match_found',
+      'game:reconnected',
+      'game:round_start',
+      'game:move_locked',
+      'game:opponent_picked',
+      'game:round_result',
+      'game:trivia_start',
+      'game:trivia_self_answered',
+      'game:effect_received',
+      'game:trivia_resolved',
+      'game:over',
+      'game:player_disconnected',
+      'game:spy_reveal',
+      'game:opponent_exposed',
     ]) {
       SocketService.off(ev);
     }
@@ -320,13 +352,13 @@ class _GameScreenState extends State<GameScreen> {
                           _phase == GamePhase.reveal) ...[
                         _buildTimerAndArena(isP1, me, opponent),
                         const SizedBox(height: 16),
-                        if (_phase == GamePhase.picking)
-                          _buildMovePicker(),
+                        if (_phase == GamePhase.picking) _buildMovePicker(),
                         if (_phase == GamePhase.reveal && _roundResult != null)
                           _buildRoundResult(isP1),
                       ] else if (_phase == GamePhase.trivia && _trivia != null)
                         TriviaCard(trivia: _trivia!, onAnswer: _answerTrivia)
-                      else if (_phase == GamePhase.gameover && _gameOver != null)
+                      else if (_phase == GamePhase.gameover &&
+                          _gameOver != null)
                         _buildGameOver(isP1),
                     ],
                   ),
@@ -376,19 +408,21 @@ class _GameScreenState extends State<GameScreen> {
               ],
             ),
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
                   color: const Color(0xFFF0F0F0),
                   borderRadius: BorderRadius.circular(20)),
               child: Text(
-                _isP1 == null ? '...' : isP1 ? '● P1' : '● P2',
+                _isP1 == null
+                    ? '...'
+                    : isP1
+                        ? '● P1'
+                        : '● P2',
                 style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: _isP1 == null
-                        ? AppColors.textMuted
-                        : AppColors.green),
+                    color:
+                        _isP1 == null ? AppColors.textMuted : AppColors.green),
               ),
             ),
           ],
@@ -476,8 +510,7 @@ class _GameScreenState extends State<GameScreen> {
     );
   }
 
-  Widget _buildTimerAndArena(
-      bool isP1, PlayerState me, PlayerState opponent) {
+  Widget _buildTimerAndArena(bool isP1, PlayerState me, PlayerState opponent) {
     final timerColor = _timer <= 2 ? AppColors.coral : AppColors.primary;
 
     return Column(
@@ -511,8 +544,8 @@ class _GameScreenState extends State<GameScreen> {
                           color: timerColor,
                           height: 1)),
                   const Text('DETIK',
-                      style: TextStyle(
-                          fontSize: 10, color: AppColors.textMuted)),
+                      style:
+                          TextStyle(fontSize: 10, color: AppColors.textMuted)),
                 ],
               ),
             ),
@@ -576,9 +609,9 @@ class _GameScreenState extends State<GameScreen> {
   Widget _buildPlayerSide({required bool isMe, required bool isP1}) {
     String icon = '?';
     if (_phase == GamePhase.reveal && _roundResult != null) {
-      final moveKey =
-          isMe ? (isP1 ? _roundResult!.p1Move : _roundResult!.p2Move)
-                : (isP1 ? _roundResult!.p2Move : _roundResult!.p1Move);
+      final moveKey = isMe
+          ? (isP1 ? _roundResult!.p1Move : _roundResult!.p2Move)
+          : (isP1 ? _roundResult!.p2Move : _roundResult!.p1Move);
       icon = GameMoveExt.fromString(moveKey)?.icon ?? '?';
     } else if (isMe) {
       icon = _myMove?.icon ?? (_lockedMove != null ? '🔒' : '?');
@@ -604,12 +637,9 @@ class _GameScreenState extends State<GameScreen> {
           height: 100,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: isMe
-                ? const Color(0xFFF4A090)
-                : const Color(0xFFF5EFEF),
+            color: isMe ? const Color(0xFFF4A090) : const Color(0xFFF5EFEF),
             border: Border.all(
-                color:
-                    isMe ? AppColors.primary : const Color(0xFFE8D8D8),
+                color: isMe ? AppColors.primary : const Color(0xFFE8D8D8),
                 width: isMe ? 3 : 2),
           ),
           child: Center(
@@ -641,8 +671,7 @@ class _GameScreenState extends State<GameScreen> {
         const SizedBox(height: 14),
         Row(
           children: GameMove.values.map((move) {
-            final isLocked =
-                _lockedMove != null && _lockedMove != move.name;
+            final isLocked = _lockedMove != null && _lockedMove != move.name;
             final isSelected = _myMove == move ||
                 (_lockedMove != null && _lockedMove == move.name);
             final isDisabled = _myMove != null || _lockedMove != null;
@@ -660,15 +689,13 @@ class _GameScreenState extends State<GameScreen> {
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
-                          color: isSelected
-                              ? AppColors.primary
-                              : AppColors.border,
+                          color:
+                              isSelected ? AppColors.primary : AppColors.border,
                           width: isSelected ? 2.5 : 2),
                       boxShadow: isSelected
                           ? [
                               BoxShadow(
-                                  color:
-                                      AppColors.primary.withOpacity(0.15),
+                                  color: AppColors.primary.withOpacity(0.15),
                                   blurRadius: 16)
                             ]
                           : [
@@ -677,8 +704,8 @@ class _GameScreenState extends State<GameScreen> {
                                   blurRadius: 10)
                             ],
                     ),
-                    padding: const EdgeInsets.symmetric(
-                        vertical: 20, horizontal: 4),
+                    padding:
+                        const EdgeInsets.symmetric(vertical: 20, horizontal: 4),
                     child: Opacity(
                       opacity: isLocked ? 0.3 : 1.0,
                       child: Column(
@@ -698,8 +725,7 @@ class _GameScreenState extends State<GameScreen> {
                                 letterSpacing: 0.5),
                           ),
                           if (isLocked)
-                            const Text('🔒',
-                                style: TextStyle(fontSize: 10)),
+                            const Text('🔒', style: TextStyle(fontSize: 10)),
                         ],
                       ),
                     ),
@@ -731,7 +757,11 @@ class _GameScreenState extends State<GameScreen> {
     return Column(
       children: [
         Text(
-          myResult == 'WIN' ? '🎉 MENANG!' : myResult == 'LOSE' ? '💔 KALAH!' : '🤝 SERI!',
+          myResult == 'WIN'
+              ? '🎉 MENANG!'
+              : myResult == 'LOSE'
+                  ? '💔 KALAH!'
+                  : '🤝 SERI!',
           style: TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.w900,
@@ -747,8 +777,8 @@ class _GameScreenState extends State<GameScreen> {
             myResult == 'WIN'
                 ? 'Damage ke lawan: -$dmgToOpp HP'
                 : 'Kamu kena: -$dmg HP',
-            style: const TextStyle(
-                fontSize: 13, color: AppColors.textSecondary),
+            style:
+                const TextStyle(fontSize: 13, color: AppColors.textSecondary),
           ),
         ],
       ],
@@ -762,8 +792,7 @@ class _GameScreenState extends State<GameScreen> {
 
     return Column(
       children: [
-        Text(iWon ? '🏆' : '💀',
-            style: const TextStyle(fontSize: 64)),
+        Text(iWon ? '🏆' : '💀', style: const TextStyle(fontSize: 64)),
         const SizedBox(height: 12),
         Text(
           iWon ? 'MENANG!' : 'KALAH!',
@@ -784,9 +813,7 @@ class _GameScreenState extends State<GameScreen> {
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
-                BoxShadow(
-                    color: Colors.black.withOpacity(0.06),
-                    blurRadius: 12)
+                BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 12)
               ],
             ),
             padding: const EdgeInsets.all(16),
@@ -803,8 +830,7 @@ class _GameScreenState extends State<GameScreen> {
                   style: TextStyle(
                       fontSize: 26,
                       fontWeight: FontWeight.w900,
-                      color:
-                          delta > 0 ? AppColors.green : AppColors.coral),
+                      color: delta > 0 ? AppColors.green : AppColors.coral),
                 ),
               ],
             ),
@@ -821,13 +847,13 @@ class _GameScreenState extends State<GameScreen> {
             ),
             const SizedBox(width: 12),
             OutlinedButton(
-              onPressed: () => Navigator.pushReplacementNamed(
-                  context, '/leaderboard'),
+              onPressed: () =>
+                  Navigator.pushReplacementNamed(context, '/leaderboard'),
               style: OutlinedButton.styleFrom(
                 side: const BorderSide(color: AppColors.primary),
                 shape: const StadiumBorder(),
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 24, vertical: 14),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
               ),
               child: const Text('Lihat Ranking',
                   style: TextStyle(color: AppColors.primary)),
@@ -843,8 +869,7 @@ class _GameScreenState extends State<GameScreen> {
       padding: const EdgeInsets.only(bottom: 8),
       child: Container(
         constraints: const BoxConstraints(maxWidth: 200),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: eff.type == 'buff'
               ? const Color(0xFFE8F5E9)

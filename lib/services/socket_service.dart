@@ -12,56 +12,56 @@ class SocketService {
   static IO.Socket connect() {
     final token = AuthService.token;
 
-    // Reset socket jika token berubah (ganti akun / re-login)
-    if (_socket != null && _connectedToken != token) {
-      _socket!.disconnect();
-      _socket!.dispose();
+    if (_socket != null) {
+      if (_socket!.connected) {
+        return _socket!;
+      }
+
+      try {
+        _socket!.dispose();
+      } catch (_) {}
+
       _socket = null;
-      _connectedToken = null;
     }
 
-    if (_socket != null && _socket!.connected) return _socket!;
-
     _connectedToken = token;
+
     _socket = IO.io(
       AppConfig.socketUrl,
       IO.OptionBuilder()
-          // ✅ FIX UTAMA: path wajib sama dengan server (/api/socket)
-          .setPath('/socket.io')
-          // ✅ Pakai polling dulu lalu upgrade ke websocket (lebih reliable di Railway)
-          .setTransports(['polling', 'websocket'])
-          .disableAutoConnect()
+          .setPath('/api/socket')
+          // FIX: jangan websocket only
+          // agar web hosting + mobile sama-sama stabil
+          .setTransports(['websocket', 'polling'])
+          .enableAutoConnect()
+          .enableForceNew()
           .enableReconnection()
-          .setReconnectionAttempts(10)
+          .setReconnectionAttempts(999)
           .setReconnectionDelay(1000)
           .setTimeout(20000)
-          .setAuth({'token': token ?? ''})
+          .setAuth({
+            'token': token ?? '',
+          })
+          .setExtraHeaders({'Authorization': 'Bearer ${token ?? ''}'})
           .build(),
     );
 
-    _socket!.on('connect', (_) {
-      print('[Socket] ✅ Connected: ${_socket!.id}');
-    });
-    _socket!.on('disconnect', (reason) {
-      print('[Socket] ❌ Disconnected: $reason');
-    });
-    _socket!.on('connect_error', (e) {
-      print('[Socket] ⚠️ Connect error: $e'); // ← PENTING LIHAT INI
-    });
-    _socket!.on('reconnect', (_) {
-      print('[Socket] 🔄 Reconnected');
-    });
-    _socket!.on('error', (e) {
-      print('[Socket] Error: $e'); // ← PENTING LIHAT INI
+    _socket!.onConnect((_) {
+      print('[SOCKET] CONNECTED => ${_socket!.id}');
     });
 
-    // ✅ TAMBAH INI:
-    print('[Socket] Attempting to connect...');
-    print('[Socket] URL: ${AppConfig.socketUrl}');
-    print('[Socket] Token: ${token ?? "KOSONG!"}');
-    print('[Socket] Path: /api/socket');
+    _socket!.onDisconnect((reason) {
+      print('[SOCKET] DISCONNECTED => $reason');
+    });
 
-    _socket!.connect();
+    _socket!.onConnectError((e) {
+      print('[SOCKET] CONNECT ERROR => $e');
+    });
+
+    _socket!.onError((e) {
+      print('[SOCKET] ERROR => $e');
+    });
+
     return _socket!;
   }
 

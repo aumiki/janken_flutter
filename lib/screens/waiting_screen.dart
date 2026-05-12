@@ -49,6 +49,7 @@ class _WaitingScreenState extends State<WaitingScreen>
   void _setupSocket() {
     // ✅ FIX: game:player_joined membawa state terbaru (dengan P2),
     // gunakan state dari server, bukan dari args yang hanya punya P1
+    SocketService.off('game:player_joined');
     SocketService.on('game:player_joined', (data) {
       if (!mounted) return;
       final newState = data['state'];
@@ -63,11 +64,12 @@ class _WaitingScreenState extends State<WaitingScreen>
       } else {
         gs = _gsFromArgs ?? '';
       }
-      Navigator.pushReplacementNamed(
-          context, '/game', arguments: {'room': _code, 'gs': gs});
+      Navigator.pushReplacementNamed(context, '/game',
+          arguments: {'room': _code, 'gs': gs});
     });
 
     // ✅ FIX: tambah listener ranked_match_found yang sebelumnya hilang
+    SocketService.off('game:ranked_match_found');
     SocketService.on('game:ranked_match_found', (data) {
       if (!mounted) return;
       final roomCode = data['roomCode'] ?? _code;
@@ -78,8 +80,8 @@ class _WaitingScreenState extends State<WaitingScreen>
           gs = base64Encode(utf8.encode(jsonEncode(newState)));
         } catch (_) {}
       }
-      Navigator.pushReplacementNamed(
-          context, '/game', arguments: {'room': roomCode, 'gs': gs});
+      Navigator.pushReplacementNamed(context, '/game',
+          arguments: {'room': roomCode, 'gs': gs});
     });
   }
 
@@ -151,8 +153,7 @@ class _WaitingScreenState extends State<WaitingScreen>
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                          color: AppColors.primary.withOpacity(0.3),
-                          width: 2),
+                          color: AppColors.primary.withOpacity(0.3), width: 2),
                       boxShadow: [
                         BoxShadow(
                             color: AppColors.primary.withOpacity(0.1),
@@ -195,8 +196,8 @@ class _WaitingScreenState extends State<WaitingScreen>
                 style: OutlinedButton.styleFrom(
                   side: const BorderSide(color: AppColors.border),
                   shape: const StadiumBorder(),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 28, vertical: 14),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
                 ),
                 child: const Text(
                   'Batalkan',
