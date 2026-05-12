@@ -23,39 +23,43 @@ class SocketService {
     if (_socket != null && _socket!.connected) return _socket!;
 
     _connectedToken = token;
-    print('[Socket] 🔑 Token saat connect: "$token"'); // ← tambah ini
     _socket = IO.io(
       AppConfig.socketUrl,
       IO.OptionBuilder()
-          .setPath('/api/socket')
-          .setTransports(['websocket']) // ← websocket only, skip polling
+          // ✅ FIX UTAMA: path wajib sama dengan server (/api/socket)
+          .setPath('/socket.io')
+          // ✅ Pakai polling dulu lalu upgrade ke websocket (lebih reliable di Railway)
+          .setTransports(['polling', 'websocket'])
           .disableAutoConnect()
           .enableReconnection()
-          .setReconnectionAttempts(5)
-          .setReconnectionDelay(2000)
-          .setTimeout(30000)
-          .setExtraHeaders({
-            'Authorization': 'Bearer ${token ?? ''}', // ← pindah ke header
-          })
+          .setReconnectionAttempts(10)
+          .setReconnectionDelay(1000)
+          .setTimeout(20000)
           .setAuth({'token': token ?? ''})
           .build(),
     );
 
-    _socket!.onConnect((_) {
+    _socket!.on('connect', (_) {
       print('[Socket] ✅ Connected: ${_socket!.id}');
     });
-    _socket!.onDisconnect((reason) {
+    _socket!.on('disconnect', (reason) {
       print('[Socket] ❌ Disconnected: $reason');
     });
-    _socket!.onConnectError((e) {
-      print('[Socket] ⚠️ Connect error: $e');
+    _socket!.on('connect_error', (e) {
+      print('[Socket] ⚠️ Connect error: $e'); // ← PENTING LIHAT INI
     });
-    _socket!.onReconnect((_) {
+    _socket!.on('reconnect', (_) {
       print('[Socket] 🔄 Reconnected');
     });
-    _socket!.onError((e) {
-      print('[Socket] Error: $e');
+    _socket!.on('error', (e) {
+      print('[Socket] Error: $e'); // ← PENTING LIHAT INI
     });
+
+    // ✅ TAMBAH INI:
+    print('[Socket] Attempting to connect...');
+    print('[Socket] URL: ${AppConfig.socketUrl}');
+    print('[Socket] Token: ${token ?? "KOSONG!"}');
+    print('[Socket] Path: /api/socket');
 
     _socket!.connect();
     return _socket!;
