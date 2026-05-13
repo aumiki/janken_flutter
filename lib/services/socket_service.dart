@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import '../config/app_config.dart';
 import '../services/auth_service.dart';
@@ -6,12 +8,39 @@ class SocketService {
   static IO.Socket? _socket;
   static String? _connectedToken;
 
+  // Keep-alive untuk mencegah Railway auto-sleep (plan gratis).
+  static Timer? _keepAliveTimer;
+  static const Duration _keepAliveInterval = Duration(minutes: 4);
+
   // Buffer emit sebelum socket benar-benar connected
   static final List<_QueuedEmit> _emitQueue = [];
   static bool _connectListenerAttached = false;
 
   static IO.Socket? get socket => _socket;
   static bool get isConnected => _socket?.connected ?? false;
+
+  static void _startKeepAlive() {
+    _keepAliveTimer?.cancel();
+
+    _keepAliveTimer = Timer.periodic(_keepAliveInterval, (_) {
+      // Kalau socket sudah connected, kirim ping.
+      // Kalau belum connected, panggil connect ulang (reconnect lib kadang lambat saat server baru wake).
+      if (isConnected) {
+        try {
+          _socket?.emit('ping', {});
+        } catch (_) {}
+      } else {
+        try {
+          connect();
+        } catch (_) {}
+      }
+    });
+  }
+
+  static void _stopKeepAlive() {
+    _keepAliveTimer?.cancel();
+    _keepAliveTimer = null;
+  }
 
   static IO.Socket connect() {
     final token = AuthService.token;
@@ -42,7 +71,8 @@ class SocketService {
           .enableReconnection()
           .setReconnectionAttempts(999999)
           .setReconnectionDelay(500)
-          .setTimeout(10000)
+          // lebih cepat fail kalau server masih belum wake-up / lambat
+          .setTimeout(5000)
           .setAuth({
             'token': token ?? '',
           })
@@ -57,6 +87,9 @@ class SocketService {
     if (!_connectListenerAttached) {
       _socket!.onConnect((_) {
         print('[SOCKET] CONNECTED');
+
+        // mulai keep-alive begitu connect sukses
+        _startKeepAlive();
 
         // Flush semua emit yang sempat ditahan
         if (_emitQueue.isNotEmpty) {
@@ -94,6 +127,7 @@ class SocketService {
   }
 
   static void disconnect() {
+    _stopKeepAlive();
     try {
       _socket?.disconnect();
       _socket?.dispose();

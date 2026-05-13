@@ -192,6 +192,11 @@ class _LobbyScreenState extends State<LobbyScreen> {
       if (mounted) setState(() => _socketInitialized = true);
       print('[Socket] Connected to lobby');
 
+      // Jika user punya game yang tersisa di server (ghost game), coba force-leave
+      // begitu socket connect, supaya tidak menunggu event error.
+      SocketService.emit('game:leave_room', {});
+      SocketService.emit('game:forfeit', {});
+
       // penting: listener challenge harus terdaftar ulang setelah reconnect
       registerLobbyEvents();
     });
